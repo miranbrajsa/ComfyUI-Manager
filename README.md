@@ -5,6 +5,8 @@
 ![menu](misc/menu.jpg)
 
 ## NOTICE
+* V2.48.1: Security policy has been changed. Downloads of models in the list are allowed under the 'normal' security level.
+* V2.47: Security policy has been changed. The former 'normal' is now 'normal-', and 'normal' no longer allows high-risk features, even if your ComfyUI is local.
 * V2.37 Show a ✅ mark to accounts that have been active on GitHub for more than six months.
 * V2.33 Security policy is applied.
 * V2.21 [cm-cli](docs/en/cm-cli.md) tool is added.
@@ -315,6 +317,8 @@ NODE_CLASS_MAPPINGS.update({
   * When you create the `pip_overrides.json` file, it changes the installation of specific pip packages to installations defined by the user.
     * Please refer to the `pip_overrides.json.template` file.
     
+* Use `aria2` as downloader
+  * [howto](docs/en/use_aria2.md)
 
 ## Scanner
 When you run the `scan.sh` script:
@@ -340,13 +344,17 @@ When you run the `scan.sh` script:
 * Currently, `vid2vid` is not being updated, causing compatibility issues.
 * If you encounter the error message `Overlapped Object has pending operation at deallocation on Comfyui Manager load` under Windows
   * Edit `config.ini` file: add `windows_selector_event_loop_policy = True`
-
+* if `SSL: CERTIFICATE_VERIFY_FAILED` error is occured.
+  * Edit `config.ini` file: add `bypass_ssl = True`
 
 ## Security policy
   * Edit `config.ini` file: add `security_level = <LEVEL>`
     * `strong`
       * doesn't allow `high` and `middle` level risky feature
     * `normal`
+      * doesn't allow `high` level risky feature
+      * `middle` level risky feature is available
+    * `normal-`
       * doesn't allow `high` level risky feature if `--listen` is specified and not starts with `127.`
       * `middle` level risky feature is available
     * `weak`
@@ -380,6 +388,11 @@ When you run the `scan.sh` script:
 * https://github.com/SimithWang/comfyui-renameImages
 * https://github.com/icefairy64/comfyui-model-tilt
 * https://github.com/andrewharp/ComfyUI-EasyNodes
+* https://github.com/SimithWang/comfyui-renameImages
+* https://github.com/Tcheko243/ComfyUI-Photographer-Alpha7-Nodes
+* https://github.com/Limbicnation/ComfyUINodeToolbox
+* https://github.com/chenpipi0807/pip_longsize
+* https://github.com/APZmedia/ComfyUI-APZmedia-srtTools
 
 ## Roadmap
 
@@ -391,10 +404,10 @@ When you run the `scan.sh` script:
 - [ ] Auto migration for custom nodes with changed structures.
 - [ ] Version control feature for nodes.
 - [ ] List of currently used custom nodes.
-- [ ] Download support multiple model download.
-- [ ] Model download via url.
+- [x] Download support multiple model download.
+- [x] Model download via url.
 - [x] List sorting (custom nodes).
-- [ ] List sorting (model).
+- [x] List sorting (model).
 - [ ] Provides description of node.
 
 

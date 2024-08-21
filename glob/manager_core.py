@@ -23,12 +23,17 @@ sys.path.append(glob_path)
 import cm_global
 from manager_util import *
 
-version = [2, 38]
+version = [2, 50, 1]
 version_str = f"V{version[0]}.{version[1]}" + (f'.{version[2]}' if len(version) > 2 else '')
+
 
 comfyui_manager_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 custom_nodes_path = os.path.abspath(os.path.join(comfyui_manager_path, '..'))
-comfy_path = os.path.abspath(os.path.join(custom_nodes_path, '..'))
+
+comfy_path = os.environ.get('COMFYUI_PATH')
+if comfy_path is None:
+    comfy_path = os.path.abspath(os.path.join(custom_nodes_path, '..'))
+
 channel_list_path = os.path.join(comfyui_manager_path, 'channels.list')
 config_path = os.path.join(comfyui_manager_path, "config.ini")
 startup_script_path = os.path.join(comfyui_manager_path, "startup-scripts")
@@ -92,11 +97,14 @@ def clear_pip_cache():
 def is_blacklisted(name):
     name = name.strip()
 
-    pattern = r'([^<>!=]+)([<>!=]=?)(.*)'
+    pattern = r'([^<>!=]+)([<>!=]=?)([^ ]*)'
     match = re.search(pattern, name)
 
     if match:
         name = match.group(1)
+
+    if name in cm_global.pip_blacklist:
+        return True
 
     if name in cm_global.pip_downgrade_blacklist:
         pips = get_installed_packages()
@@ -118,11 +126,14 @@ def is_installed(name):
     if name.startswith('#'):
         return True
 
-    pattern = r'([^<>!=]+)([<>!=]=?)(.*)'
+    pattern = r'([^<>!=]+)([<>!=]=?)([0-9.a-zA-Z]*)'
     match = re.search(pattern, name)
 
     if match:
         name = match.group(1)
+
+    if name in cm_global.pip_blacklist:
+        return True
 
     if name in cm_global.pip_downgrade_blacklist:
         pips = get_installed_packages()
@@ -181,7 +192,9 @@ class ManagerFuncs:
             print(f"[ComfyUI-Manager] Unexpected behavior: `{cmd}`")
             return 0
 
-        subprocess.check_call(cmd, cwd=cwd)
+        new_env = os.environ.copy()
+        new_env["COMFYUI_PATH"] = comfy_path
+        subprocess.check_call(cmd, cwd=cwd, env=new_env)
 
         return 0
 
@@ -325,6 +338,8 @@ def __win_check_git_update(path, do_fetch=False, do_update=False):
     else:
         command = [sys.executable, git_script_path, "--check", path]
 
+    new_env = os.environ.copy()
+    new_env["COMFYUI_PATH"] = comfy_path
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=custom_nodes_path)
     output, _ = process.communicate()
     output = output.decode('utf-8').strip()
@@ -334,10 +349,10 @@ def __win_check_git_update(path, do_fetch=False, do_update=False):
         safedir_path = path.replace('\\', '/')
         try:
             print(f"[ComfyUI-Manager] Try fixing 'dubious repository' error on '{safedir_path}' repo")
-            process = subprocess.Popen(['git', 'config', '--global', '--add', 'safe.directory', safedir_path], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            process = subprocess.Popen(['git', 'config', '--global', '--add', 'safe.directory', safedir_path], env=new_env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             output, _ = process.communicate()
 
-            process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            process = subprocess.Popen(command, env=new_env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             output, _ = process.communicate()
             output = output.decode('utf-8').strip()
         except Exception:
@@ -376,8 +391,10 @@ def __win_check_git_update(path, do_fetch=False, do_update=False):
 
 
 def __win_check_git_pull(path):
+    new_env = os.environ.copy()
+    new_env["COMFYUI_PATH"] = comfy_path
     command = [sys.executable, git_script_path, "--pull", path]
-    process = subprocess.Popen(command, cwd=custom_nodes_path)
+    process = subprocess.Popen(command, env=new_env, cwd=custom_nodes_path)
     process.wait()
 
 
@@ -394,8 +411,14 @@ def execute_install_script(url, repo_path, lazy_mode=False, instant_execution=Fa
             with open(requirements_path, "r") as requirements_file:
                 for line in requirements_file:
                     package_name = remap_pip_package(line.strip())
+
                     if package_name and not package_name.startswith('#'):
-                        install_cmd = [sys.executable, "-m", "pip", "install", package_name]
+                        if '--index-url' in package_name:
+                            s = package_name.split('--index-url')
+                            install_cmd = [sys.executable, "-m", "pip", "install", s[0].strip(), '--index-url', s[1].strip()]
+                        else:
+                            install_cmd = [sys.executable, "-m", "pip", "install", package_name]
+
                         if package_name.strip() != "" and not package_name.startswith('#'):
                             try_install_script(url, repo_path, install_cmd, instant_execution=instant_execution)
 
@@ -504,10 +527,16 @@ class GitProgress(RemoteProgress):
 
 def is_valid_url(url):
     try:
+        # Check for HTTP/HTTPS URL format
         result = urlparse(url)
-        return all([result.scheme, result.netloc])
-    except ValueError:
-        return False
+        if all([result.scheme, result.netloc]):
+            return True
+    finally:
+        # Check for SSH git URL format
+        pattern = re.compile(r"^(.+@|ssh:\/\/).+:.+$")
+        if pattern.match(url):
+            return True
+    return False
 
 
 def gitclone_install(files, instant_execution=False, msg_prefix=''):
@@ -1197,4 +1226,5 @@ def unzip(model_path):
 
     os.remove(model_path)
     return True
+
 
